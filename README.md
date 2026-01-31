@@ -1,4 +1,4 @@
-# OpenSSL 1.1.1 Custom Repository
+# OpenSSL 1.1 Custom Repository for Arch Linux
 
 An Arch Linux repository providing prebuilt binaries for **OpenSSL 1.1**.
 
@@ -25,9 +25,7 @@ An Arch Linux repository providing prebuilt binaries for **OpenSSL 1.1**.
    Update your package databases and install the desired packages:
 
    > [!TIP]
-   >
    > Since these are legacy libraries, it is recommended to install them with the `--asdeps` flag when there's a package requiring them. 
-   >
    > `--asdeps` marks packages as dependencies.
 
    ```bash
