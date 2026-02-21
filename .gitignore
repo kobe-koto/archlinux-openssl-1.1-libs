@@ -1,1 +1,4 @@
 openssl-1.1-libs.*.tar.*.old
+openssl-1.1-libs.tar
+archlinux-build/
+dist/
