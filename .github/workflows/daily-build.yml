@@ -1,0 +1,44 @@
+name: Daily Build
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache archlinux-build container
+        uses: actions/cache@v4
+        with:
+          path: archlinux-build/
+          key: ${{ runner.os }}-archlinux-build-${{ hashFiles('build.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-archlinux-build-
+
+      - name: Run build script
+        run: bash build.sh --nspawn=bootstrap
+
+      # - name: Upload packages
+      #   uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: openssl-packages
+      #     path: x86_64/
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add x86_64/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: auto-update built packages"
+            git push
+          fi
