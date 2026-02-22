@@ -57,24 +57,45 @@ cd archlinux-openssl-1.1-libs
 >
 > These scripts require **root/sudo** privileges to manage containers and install build dependencies.
 
+#### Host Requirements (pacstrap only)
+
+- Host is Arch Linux
+
+  **Enable repositories**: `core`, `extra`, `multilib`
+
+  **Packages**: `arch-install-scripts`
+
+- Other Distros
+
+  Install `pacman` and `arch-install-scripts`, then follow "Host is Arch Linux".
+
 #### Container Requirements
 
 If you choose to set up the build environment manually, the container must have:
 
+- **Repositories Enabled**: `core`, `extra`, `multilib`
 - **Packages:** `base`, `base-devel`, `multilib-devel`, `git`.
 - **User:** A user named `worker` (default) with `NOPASSWD` sudo privileges.
 - **Security:** A fully populated and initialized `pacman-key`.
 
-#### Option A: Using `Systemd-nspawn` (Recommended for Arch Linux system, Root Required)
+**Non-Arch users:** Please refer to [ArchWiki: Install Arch Linux from existing Linux: From a host running another Linux distribution](https://wiki.archlinux.org/title/Install_Arch_Linux_from_existing_Linux#From_a_host_running_another_Linux_distribution).
+
+#### Option A: Using `Systemd-nspawn` (Root Required)
 
 This method uses a localized container (defaulting to `./archlinux-build/`). 
 
-If the directory is missing, the script will attempt to bootstrap it using `pacstrap` (requires `arch-install-scripts`).
+If the directory is missing, the script will attempt to build a new chroot environment.
 
-**Non-Arch users:** Please refer to [ArchWiki: Install Arch Linux from existing Linux: From a host running another Linux distribution](https://wiki.archlinux.org/title/Install_Arch_Linux_from_existing_Linux#From_a_host_running_another_Linux_distribution).
+- `bootstrap` mode
+
+  This script will download a latest bootstrap tarball, initialize and populate the keyring, enable `multilib` repo, and install required packages (see above)
+
+- `pacstrap` mode
+
+  Uses system's `pacstrap`, see "Host Requirements (pacstrap only)".
 
 ```bash
-bash build.sh --nspawn
+bash build.sh --nspawn=[bootstrap|pacstrap]
 ```
 
 #### Option B: Using [Distrobox](https://distrobox.it)
