@@ -71,29 +71,6 @@ fi
 
 echo ">>> Mode: $MODE (Method: ${NSPAWN_METHOD:-N/A})"
 
-echo ">>> Checking AUR for updates..."
-if ! command -v jq &> /dev/null; then
-    echo "ERROR: jq is required to check AUR versions. Please install it."
-    exit 1
-fi
-
-AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=openssl-1.1&arg[]=lib32-openssl-1.1")
-AUR_VER_OPENSSL=$(echo "$AUR_INFO" | jq -r '.results[] | select(.Name == "openssl-1.1") | .Version // empty')
-AUR_VER_LIB32=$(echo "$AUR_INFO" | jq -r '.results[] | select(.Name == "lib32-openssl-1.1") | .Version // empty')
-
-if [[ -z "$AUR_VER_OPENSSL" || -z "$AUR_VER_LIB32" ]]; then
-    echo "ERROR: Failed to fetch versions from AUR."
-    exit 1
-fi
-
-if [[ -f "x86_64/openssl-1.1-${AUR_VER_OPENSSL}-x86_64.pkg.tar.zst" && -f "x86_64/lib32-openssl-1.1-${AUR_VER_LIB32}-x86_64.pkg.tar.zst" ]]; then
-    echo ">>> Versions are up-to-date (openssl-1.1: $AUR_VER_OPENSSL, lib32-openssl-1.1: $AUR_VER_LIB32)."
-    echo ">>> No build needed."
-    exit 0
-fi
-
-echo ">>> Version mismatch or packages missing. Proceeding with build..."
-
 if [[ "$MODE" == "distrobox" ]]; then
     EXEC_PREFIX="distrobox enter $CONTAINER_NAME -- sudo"
 
@@ -132,8 +109,26 @@ else
     exit 1;
 fi
 
-# ==== UPDATE ====
+# ==== UPDATE CONTAINER ====
 $EXEC_PREFIX sudo pacman -Syu --disable-sandbox --noconfirm
+
+# ==== CHECK AUR FOR UPDATES ====
+echo ">>> Checking AUR for updates..."
+AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=openssl-1.1&arg[]=lib32-openssl-1.1")
+AUR_VER_OPENSSL=$(echo "$AUR_INFO" | jq -r '.results[] | select(.Name == "openssl-1.1") | .Version // empty')
+AUR_VER_LIB32=$(echo "$AUR_INFO" | jq -r '.results[] | select(.Name == "lib32-openssl-1.1") | .Version // empty')
+
+if [[ -z "$AUR_VER_OPENSSL" || -z "$AUR_VER_LIB32" ]]; then
+    echo "ERROR: Failed to fetch versions from AUR."
+    exit 1
+fi
+
+if [[ -f "x86_64/openssl-1.1-${AUR_VER_OPENSSL}-x86_64.pkg.tar.zst" && -f "x86_64/lib32-openssl-1.1-${AUR_VER_LIB32}-x86_64.pkg.tar.zst" ]]; then
+    echo ">>> Versions are up-to-date (openssl-1.1: $AUR_VER_OPENSSL, lib32-openssl-1.1: $AUR_VER_LIB32)."
+    echo ">>> No build needed."
+    exit 0
+fi
+echo ">>> Version mismatch or packages missing. Proceeding with build..."
 
 # ==== BUILD ====
 $EXEC_PREFIX sudo bash container_build.sh $WORKER_USERNAME
