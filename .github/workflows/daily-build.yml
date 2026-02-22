@@ -14,15 +14,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cache archlinux-build container
+        id: cache
         uses: actions/cache@v4
         with:
-          path: archlinux-build/
+          path: archlinux-build.tar
           key: ${{ runner.os }}-archlinux-build-${{ hashFiles('build.sh') }}
           restore-keys: |
             ${{ runner.os }}-archlinux-build-
 
+      - name: Extract archlinux-build container
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: sudo tar -xf archlinux-build.tar
+
       - name: Run build script
         run: bash build.sh --nspawn=bootstrap
+
+      - name: Tarball container for cache
+        run: sudo tar -cf archlinux-build.tar archlinux-build/
 
       # - name: Upload packages
       #   uses: actions/upload-artifact@v4
