@@ -4,6 +4,7 @@ set -e
 
 CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
+export ENABLE_LLVM="${ENABLE_LLVM:-0}"
 if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
     echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
     exit 1
@@ -11,6 +12,11 @@ fi
 
 if [[ "$ENABLE_MOLD" != 0 && "$ENABLE_MOLD" != 1 ]]; then
     echo "ERROR: ENABLE_MOLD must be 0 or 1." >&2
+    exit 1
+fi
+
+if [[ "$ENABLE_LLVM" != 0 && "$ENABLE_LLVM" != 1 ]]; then
+    echo "ERROR: ENABLE_LLVM must be 0 or 1." >&2
     exit 1
 fi
 
@@ -28,6 +34,36 @@ BUILD_FOLDER="$BUILD_FOLDER/build"
 REPO_FOLDER="$WORKING_FOLDER/repo/$CUSTOM_REPO"
 
 # ==== BUILD ====
+MAKEPKG_OPTIONS=()
+if [[ "$ENABLE_LLVM" == 1 ]]; then
+    for tool in clang clang++ llvm-ar llvm-ranlib llvm-nm ld.lld; do
+        if ! command -v "$tool" > /dev/null; then
+            pacman -S --needed --disable-sandbox --noconfirm clang llvm lld
+            break
+        fi
+    done
+
+    MAKEPKG_CONFIG=$(mktemp "${TMPDIR:-/tmp}/aur-makepkg.XXXXXX.conf")
+    trap 'rm -f -- "$MAKEPKG_CONFIG"' EXIT
+    cat > "$MAKEPKG_CONFIG" <<'CONFIG'
+# Load the standard system, drop-in, and worker-user configuration first.
+source /usr/share/makepkg/util/config.sh
+source_makepkg_config /etc/makepkg.conf
+
+export CC=clang CXX=clang++
+export AR=llvm-ar RANLIB=llvm-ranlib NM=llvm-nm
+# Clang does not support GCC's -flto=auto spelling.
+LTOFLAGS="${LTOFLAGS//-flto=auto/-flto=full}"
+if [[ "${ENABLE_MOLD:-0}" != 1 ]]; then
+    export LD=ld.lld
+    LDFLAGS+=" -fuse-ld=lld"
+fi
+CONFIG
+    chmod 644 "$MAKEPKG_CONFIG"
+    MAKEPKG_OPTIONS=(--config "$MAKEPKG_CONFIG")
+    echo ">>> Using the Clang/LLVM toolchain."
+fi
+
 LINKER_PREFIX=()
 if [[ "$ENABLE_MOLD" == 1 ]]; then
     if ! command -v mold > /dev/null; then
@@ -48,7 +84,7 @@ for package in "${AUR_PACKAGES[@]}"; do
         [[ -f "$key" ]] || continue
         "${WORKER_EXEC_PREFIX[@]}" gpg --import "$key"
     done
-    "${WORKER_EXEC_PREFIX[@]}" "${LINKER_PREFIX[@]}" makepkg -D "$package_dir" -Ccsi --noconfirm
+    "${WORKER_EXEC_PREFIX[@]}" "${LINKER_PREFIX[@]}" makepkg "${MAKEPKG_OPTIONS[@]}" -D "$package_dir" -Ccsi --noconfirm
 done
 
 # ==== REPO ====

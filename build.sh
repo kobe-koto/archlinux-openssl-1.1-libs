@@ -9,6 +9,7 @@ CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
 TMP_SIZE="${TMP_SIZE:-}"
 BUILD_TMP_SIZE="${BUILD_TMP_SIZE:-}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
+ENABLE_LLVM="${ENABLE_LLVM:-0}"
 DEFAULT_AUR_PACKAGES=("openssl-1.1" "lib32-openssl-1.1")
 AUR_PACKAGES=()
 
@@ -26,6 +27,11 @@ done
 
 if [[ "$ENABLE_MOLD" != 0 && "$ENABLE_MOLD" != 1 ]]; then
     echo "ERROR: ENABLE_MOLD must be 0 or 1." >&2
+    exit 1
+fi
+
+if [[ "$ENABLE_LLVM" != 0 && "$ENABLE_LLVM" != 1 ]]; then
+    echo "ERROR: ENABLE_LLVM must be 0 or 1." >&2
     exit 1
 fi
 
@@ -190,7 +196,7 @@ fi
 echo ">>> Version mismatch or packages missing. Proceeding with build..."
 
 # ==== BUILD ====
-CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO" "ENABLE_MOLD=$ENABLE_MOLD")
+CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO" "ENABLE_MOLD=$ENABLE_MOLD" "ENABLE_LLVM=$ENABLE_LLVM")
 if [[ -n "$TMP_SIZE" ]]; then
     CONTAINER_ENV+=(TMPDIR=/var/tmp/aur-builder)
 fi

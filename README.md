@@ -166,6 +166,25 @@ Disabling it on a later run does not uninstall mold, but stops using the wrapper
 Packages whose versions are already current still skip compilation; changing
 this flag alone does not force a rebuild.
 
+### Optional Clang/LLVM toolchain
+
+Set `ENABLE_LLVM=1` to build with Clang and LLVM tools:
+
+```bash
+ENABLE_LLVM=1 bash build.sh --nspawn=bootstrap "${packages[@]}"
+```
+
+The container installs `clang`, `llvm`, and `lld` if the required tools are
+missing. A temporary makepkg configuration loads the usual system and worker
+settings, then selects `CC=clang`, `CXX=clang++`, `AR=llvm-ar`,
+`RANLIB=llvm-ranlib`, and `NM=llvm-nm`. It uses LLD unless `ENABLE_MOLD=1`
+selects the existing `mold -run` wrapper. The system configuration is not edited,
+and the temporary file is removed after success or failure.
+
+Unset or `ENABLE_LLVM=0` keeps the normal toolchain; other values are rejected.
+PKGBUILDs that hardcode compiler commands can override this selection. Changing
+the flag does not force a rebuild of already-current package versions.
+
 ### Output
 
 Set `CUSTOM_REPO` to override the repository name (default: `openssl-1.1-libs`):
