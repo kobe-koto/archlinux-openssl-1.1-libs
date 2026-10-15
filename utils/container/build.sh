@@ -5,6 +5,7 @@ set -e
 CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
 export ENABLE_LLVM="${ENABLE_LLVM:-0}"
+export LTO_MODE="${LTO_MODE:-default}"
 if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
     echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
     exit 1
@@ -19,6 +20,20 @@ if [[ "$ENABLE_LLVM" != 0 && "$ENABLE_LLVM" != 1 ]]; then
     echo "ERROR: ENABLE_LLVM must be 0 or 1." >&2
     exit 1
 fi
+
+case "$LTO_MODE" in
+    default|off|full) ;;
+    thin)
+        if [[ "$ENABLE_LLVM" != 1 ]]; then
+            echo "ERROR: LTO_MODE=thin requires ENABLE_LLVM=1." >&2
+            exit 1
+        fi
+        ;;
+    *)
+        echo "ERROR: LTO_MODE must be default, off, thin, or full." >&2
+        exit 1
+        ;;
+esac
 
 if [[ $# -lt 2 ]]; then
     echo "Usage: $0 worker-username aur-package [aur-package ...]" >&2
@@ -42,7 +57,10 @@ if [[ "$ENABLE_LLVM" == 1 ]]; then
             break
         fi
     done
+    echo ">>> Using the Clang/LLVM toolchain."
+fi
 
+if [[ "$ENABLE_LLVM" == 1 || "$LTO_MODE" != default ]]; then
     MAKEPKG_CONFIG=$(mktemp "${TMPDIR:-/tmp}/aur-makepkg.XXXXXX.conf")
     trap 'rm -f -- "$MAKEPKG_CONFIG"' EXIT
     cat > "$MAKEPKG_CONFIG" <<'CONFIG'
@@ -50,18 +68,61 @@ if [[ "$ENABLE_LLVM" == 1 ]]; then
 source /usr/share/makepkg/util/config.sh
 source_makepkg_config /etc/makepkg.conf
 
-export CC=clang CXX=clang++
-export AR=llvm-ar RANLIB=llvm-ranlib NM=llvm-nm
-# Clang does not support GCC's -flto=auto spelling.
-LTOFLAGS="${LTOFLAGS//-flto=auto/-flto=full}"
-if [[ "${ENABLE_MOLD:-0}" != 1 ]]; then
-    export LD=ld.lld
-    LDFLAGS+=" -fuse-ld=lld"
+if [[ "$ENABLE_LLVM" == 1 ]]; then
+    export CC=clang CXX=clang++
+    export AR=llvm-ar RANLIB=llvm-ranlib NM=llvm-nm
+    # Clang does not support GCC's -flto=auto spelling.
+    LTOFLAGS="${LTOFLAGS//-flto=auto/-flto=full}"
+    if [[ "${ENABLE_MOLD:-0}" != 1 ]]; then
+        export LD=ld.lld
+        LDFLAGS+=" -fuse-ld=lld"
+    fi
+fi
+
+if [[ "$LTO_MODE" != default ]]; then
+    # Replace inherited LTO flags so the selected mode is unambiguous.
+    for flag_var in CFLAGS CXXFLAGS LDFLAGS; do
+        read -r -a flags <<< "${!flag_var}"
+        selected_flags=()
+        for flag in "${flags[@]}"; do
+            case "$flag" in
+                -flto|-flto=*|-fno-lto) ;;
+                *) selected_flags+=("$flag") ;;
+            esac
+        done
+        printf -v "$flag_var" '%s' "${selected_flags[*]}"
+    done
+    unset flag_var flags selected_flags flag
+fi
+
+case "$LTO_MODE" in
+    off)
+        OPTIONS+=('!lto')
+        LTOFLAGS=-fno-lto
+        ;;
+    thin)
+        OPTIONS+=(lto)
+        LTOFLAGS=-flto=thin
+        ;;
+    full)
+        OPTIONS+=(lto)
+        if [[ "$ENABLE_LLVM" == 1 ]]; then
+            LTOFLAGS=-flto=full
+        else
+            LTOFLAGS=-flto=auto
+            export AR=gcc-ar RANLIB=gcc-ranlib NM=gcc-nm
+        fi
+        ;;
+esac
+if [[ "$LTO_MODE" == off ]]; then
+    CFLAGS+=" -fno-lto"
+    CXXFLAGS+=" -fno-lto"
+    LDFLAGS+=" -fno-lto"
 fi
 CONFIG
     chmod 644 "$MAKEPKG_CONFIG"
     MAKEPKG_OPTIONS=(--config "$MAKEPKG_CONFIG")
-    echo ">>> Using the Clang/LLVM toolchain."
+    echo ">>> LTO mode: $LTO_MODE"
 fi
 
 LINKER_PREFIX=()

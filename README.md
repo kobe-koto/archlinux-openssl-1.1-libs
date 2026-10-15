@@ -185,6 +185,33 @@ Unset or `ENABLE_LLVM=0` keeps the normal toolchain; other values are rejected.
 PKGBUILDs that hardcode compiler commands can override this selection. Changing
 the flag does not force a rebuild of already-current package versions.
 
+### Link-time optimization
+
+Use `LTO_MODE` independently of `ENABLE_MOLD` and `ENABLE_LLVM`:
+
+| Value | Behavior |
+| --- | --- |
+| `default` (unset) | Keep the usual makepkg LTO policy. |
+| `off` | Disable LTO and remove inherited LTO flags. |
+| `thin` | Enable LLVM ThinLTO; requires `ENABLE_LLVM=1`. |
+| `full` | Enable full LTO (`-flto=full` for LLVM, `-flto=auto` for GCC). |
+
+```bash
+ENABLE_LLVM=1 LTO_MODE=thin ENABLE_MOLD=1 \
+  bash build.sh --nspawn=bootstrap "${packages[@]}"
+
+ENABLE_LLVM=1 LTO_MODE=full bash build.sh --distrobox "${packages[@]}"
+LTO_MODE=full bash build.sh --nspawn=bootstrap "${packages[@]}"  # GCC LTO
+LTO_MODE=off bash build.sh --nspawn=bootstrap "${packages[@]}"
+```
+
+Modes are applied in the temporary makepkg configuration, preserving the system
+configuration. GCC full LTO also selects `gcc-ar`, `gcc-ranlib`, and `gcc-nm`.
+PKGBUILDs still control their own `options`: `!lto` or `!buildflags` can disable
+the requested optimization. Hardcoded project flags or compiler commands can
+also override the selection. These switches target C/C++ builds, not Rust LTO.
+Changing modes does not force a rebuild of already-current package versions.
+
 ### Output
 
 Set `CUSTOM_REPO` to override the repository name (default: `openssl-1.1-libs`):

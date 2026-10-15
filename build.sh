@@ -10,6 +10,7 @@ TMP_SIZE="${TMP_SIZE:-}"
 BUILD_TMP_SIZE="${BUILD_TMP_SIZE:-}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
 ENABLE_LLVM="${ENABLE_LLVM:-0}"
+LTO_MODE="${LTO_MODE:-default}"
 DEFAULT_AUR_PACKAGES=("openssl-1.1" "lib32-openssl-1.1")
 AUR_PACKAGES=()
 
@@ -34,6 +35,20 @@ if [[ "$ENABLE_LLVM" != 0 && "$ENABLE_LLVM" != 1 ]]; then
     echo "ERROR: ENABLE_LLVM must be 0 or 1." >&2
     exit 1
 fi
+
+case "$LTO_MODE" in
+    default|off|full) ;;
+    thin)
+        if [[ "$ENABLE_LLVM" != 1 ]]; then
+            echo "ERROR: LTO_MODE=thin requires ENABLE_LLVM=1." >&2
+            exit 1
+        fi
+        ;;
+    *)
+        echo "ERROR: LTO_MODE must be default, off, thin, or full." >&2
+        exit 1
+        ;;
+esac
 
 REPO_FOLDER="$PWD/repo/$CUSTOM_REPO"
 
@@ -196,7 +211,7 @@ fi
 echo ">>> Version mismatch or packages missing. Proceeding with build..."
 
 # ==== BUILD ====
-CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO" "ENABLE_MOLD=$ENABLE_MOLD" "ENABLE_LLVM=$ENABLE_LLVM")
+CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO" "ENABLE_MOLD=$ENABLE_MOLD" "ENABLE_LLVM=$ENABLE_LLVM" "LTO_MODE=$LTO_MODE")
 if [[ -n "$TMP_SIZE" ]]; then
     CONTAINER_ENV+=(TMPDIR=/var/tmp/aur-builder)
 fi
