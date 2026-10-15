@@ -37,13 +37,13 @@ jobs:
       #   if: always()
       #   with:
       #     name: openssl-packages
-      #     path: x86_64/
+      #     path: repo/
 
       - name: Commit and push changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add x86_64/
+          git add -- repo/
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else

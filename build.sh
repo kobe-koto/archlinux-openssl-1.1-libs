@@ -5,6 +5,16 @@ NSPAWN_METHOD=""
 CONTAINER_NAME="archlinux-build"
 WORKER_USERNAME="worker"
 DIST_FOLDER="$PWD/dist"
+CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
+DEFAULT_AUR_PACKAGES=("openssl-1.1" "lib32-openssl-1.1")
+AUR_PACKAGES=()
+
+if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+    echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
+    exit 1
+fi
+
+REPO_FOLDER="$PWD/repo/$CUSTOM_REPO"
 
 mkdir -p "$DIST_FOLDER"
 mkdir -p tmp/
@@ -56,10 +66,14 @@ while [[ $# -gt 0 ]]; do
             NSPAWN_METHOD="pacstrap"
             shift
             ;;
-        *)
+        -*)
             echo "Unknown option: $1"
-            echo "Usage: $0 [ --distrobox | --nspawn=[pacstrap|bootstrap] ]"
+            echo "Usage: $0 [ --distrobox | --nspawn=[pacstrap|bootstrap] ] [aur-package ...]"
             exit 1
+            ;;
+        *)
+            AUR_PACKAGES+=("$1")
+            shift
             ;;
     esac
 done
@@ -69,7 +83,13 @@ if [[ -z "$MODE" ]]; then
     exit 1
 fi
 
+if [[ ${#AUR_PACKAGES[@]} -eq 0 ]]; then
+    AUR_PACKAGES=("${DEFAULT_AUR_PACKAGES[@]}")
+fi
+
 echo ">>> Mode: $MODE (Method: ${NSPAWN_METHOD:-N/A})"
+echo ">>> Repository: $CUSTOM_REPO"
+echo ">>> AUR packages: ${AUR_PACKAGES[*]}"
 
 if [[ "$MODE" == "distrobox" ]]; then
     EXEC_PREFIX="distrobox enter $CONTAINER_NAME -- sudo"
@@ -114,25 +134,50 @@ $EXEC_PREFIX sudo pacman -Syu --disable-sandbox --noconfirm
 
 # ==== CHECK AUR FOR UPDATES ====
 echo ">>> Checking AUR for updates..."
-AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/v5/info?arg[]=openssl-1.1&arg[]=lib32-openssl-1.1")
-AUR_VER_OPENSSL=$(echo "$AUR_INFO" | jq -r '.results[] | select(.Name == "openssl-1.1") | .Version // empty')
-AUR_VER_LIB32=$(echo "$AUR_INFO" | jq -r '.results[] | select(.Name == "lib32-openssl-1.1") | .Version // empty')
+AUR_QUERY_ARGS=()
+for package in "${AUR_PACKAGES[@]}"; do
+    AUR_QUERY_ARGS+=(--data-urlencode "arg[]=$package")
+done
 
-if [[ -z "$AUR_VER_OPENSSL" || -z "$AUR_VER_LIB32" ]]; then
+if ! AUR_INFO=$(curl --fail --silent --show-error --get "${AUR_QUERY_ARGS[@]}" "https://aur.archlinux.org/rpc/v5/info"); then
     echo "ERROR: Failed to fetch versions from AUR."
     exit 1
 fi
 
-if [[ -f "x86_64/openssl-1.1-${AUR_VER_OPENSSL}-x86_64.pkg.tar.zst" && -f "x86_64/lib32-openssl-1.1-${AUR_VER_LIB32}-x86_64.pkg.tar.zst" ]]; then
-    echo ">>> Versions are up-to-date (openssl-1.1: $AUR_VER_OPENSSL, lib32-openssl-1.1: $AUR_VER_LIB32)."
+ALL_UP_TO_DATE=true
+if [[ ! -f "$REPO_FOLDER/$CUSTOM_REPO.db.tar.gz" || ! -f "$REPO_FOLDER/$CUSTOM_REPO.files.tar.gz" ]]; then
+    ALL_UP_TO_DATE=false
+fi
+for package in "${AUR_PACKAGES[@]}"; do
+    if ! version=$(jq -er --arg package "$package" '.results[] | select(.Name == $package) | .Version | select(type == "string" and length > 0)' <<< "$AUR_INFO"); then
+        echo "ERROR: Failed to fetch version from AUR for '$package'."
+        exit 1
+    fi
+    echo ">>> $package: $version"
+    package_files=("$REPO_FOLDER/${package}-${version}-"*.pkg.tar.zst)
+    if [[ ! -f "${package_files[0]}" ]]; then
+        ALL_UP_TO_DATE=false
+    fi
+done
+
+if [[ "$ALL_UP_TO_DATE" == true ]]; then
+    echo ">>> Versions are up-to-date."
     echo ">>> No build needed."
     exit 0
 fi
 echo ">>> Version mismatch or packages missing. Proceeding with build..."
 
 # ==== BUILD ====
-$EXEC_PREFIX sudo bash container_build.sh $WORKER_USERNAME
+if ! $EXEC_PREFIX sudo env CUSTOM_REPO="$CUSTOM_REPO" bash container_build.sh "$WORKER_USERNAME" "${AUR_PACKAGES[@]}"; then
+    echo "ERROR: Container build failed." >&2
+    exit 1
+fi
 
 # ==== RELEASE ====
-rm x86_64/ -rf
-tar --no-same-permissions --no-same-owner --strip-components=3 -xvf "$DIST_FOLDER/openssl-1.1-libs.tar"
+if ! tar -tf "$DIST_FOLDER/$CUSTOM_REPO.tar" > /dev/null; then
+    echo "ERROR: Repository archive is missing or invalid." >&2
+    exit 1
+fi
+rm -rf -- "$REPO_FOLDER"
+mkdir -p "$REPO_FOLDER" || exit 1
+tar --no-same-permissions --no-same-owner -xvf "$DIST_FOLDER/$CUSTOM_REPO.tar" -C "$REPO_FOLDER"

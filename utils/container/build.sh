@@ -1,37 +1,54 @@
 #!/bin/bash
 
-WORKER_EXEC_PREFIX="runuser -u ${1:-worker} --"
+set -e
+
+CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
+if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+    echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
+    exit 1
+fi
+
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $0 worker-username aur-package [aur-package ...]" >&2
+    exit 1
+fi
+
+WORKER_EXEC_PREFIX=(runuser -u "$1" --)
+shift
+AUR_PACKAGES=("$@")
 
 WORKING_FOLDER="/var/cache"
 BUILD_FOLDER="$BUILD_FOLDER/build"
-REPO_FOLDER="$WORKING_FOLDER/openssl-1.1-libs"
+REPO_FOLDER="$WORKING_FOLDER/repo/$CUSTOM_REPO"
 
 # ==== BUILD ====
 # chore: make working folder
 mkdir -p "$BUILD_FOLDER"
 chmod 777 "$BUILD_FOLDER"
 
-# build: openssl-1.1
-$WORKER_EXEC_PREFIX git clone https://aur.archlinux.org/openssl-1.1.git "$BUILD_FOLDER/openssl-1.1"
-$WORKER_EXEC_PREFIX gpg --import "$BUILD_FOLDER"/openssl-1.1/keys/pgp/*
-$WORKER_EXEC_PREFIX makepkg -D "$BUILD_FOLDER/openssl-1.1" -Ccsi --noconfirm
-
-# build: lib32-openssl-1.1
-$WORKER_EXEC_PREFIX git clone https://aur.archlinux.org/lib32-openssl-1.1.git "$BUILD_FOLDER/lib32-openssl-1.1"
-$WORKER_EXEC_PREFIX makepkg -D "$BUILD_FOLDER/lib32-openssl-1.1" -Ccsi --noconfirm
+for package in "${AUR_PACKAGES[@]}"; do
+    package_dir="$BUILD_FOLDER/$package"
+    "${WORKER_EXEC_PREFIX[@]}" git clone "https://aur.archlinux.org/$package.git" "$package_dir"
+    for key in "$package_dir"/keys/pgp/*; do
+        [[ -f "$key" ]] || continue
+        "${WORKER_EXEC_PREFIX[@]}" gpg --import "$key"
+    done
+    "${WORKER_EXEC_PREFIX[@]}" makepkg -D "$package_dir" -Ccsi --noconfirm
+done
 
 # ==== REPO ====
-mkdir -p "$REPO_FOLDER/x86_64/"
-cp "$BUILD_FOLDER"/openssl-1.1/openssl-1.1-*.pkg.tar.zst "$REPO_FOLDER/x86_64/"
-cp "$BUILD_FOLDER"/lib32-openssl-1.1/lib32-openssl-1.1-*.pkg.tar.zst "$REPO_FOLDER/x86_64/"
-repo-add "$REPO_FOLDER/x86_64/openssl-1.1-libs.db.tar.gz" "$REPO_FOLDER"/x86_64/*.pkg.tar.zst
+mkdir -p "$REPO_FOLDER"
+for package in "${AUR_PACKAGES[@]}"; do
+    cp "$BUILD_FOLDER/$package"/*.pkg.tar.zst "$REPO_FOLDER/"
+done
+repo-add "$REPO_FOLDER/$CUSTOM_REPO.db.tar.gz" "$REPO_FOLDER"/*.pkg.tar.zst
 
 # ==== TIMESTAMP ====
-date +%s > "$REPO_FOLDER/x86_64/lastupdate"
-cp -f "$REPO_FOLDER/x86_64/lastupdate" "$REPO_FOLDER/x86_64/lastsync"
+date +%s > "$REPO_FOLDER/lastupdate"
+cp -f "$REPO_FOLDER/lastupdate" "$REPO_FOLDER/lastsync"
 
 # ==== TARBALL ====
-tar -cf /root/dist_bridge/openssl-1.1-libs.tar "$REPO_FOLDER/x86_64/"
+tar -cf "/root/dist_bridge/$CUSTOM_REPO.tar" -C "$REPO_FOLDER" .
 
 # ==== CLEAN UP ====
 rm -rf "$BUILD_FOLDER"

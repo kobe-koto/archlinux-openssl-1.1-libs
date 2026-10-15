@@ -17,7 +17,7 @@ An Arch Linux repository providing prebuilt binaries for **OpenSSL 1.1**.
    ```ini
    [openssl-1.1-libs]
    SigLevel = Optional TrustAll
-   Server = https://al-openssl-1-1-libs.pages.dev/x86_64
+   Server = https://al-openssl-1-1-libs.pages.dev/repo/$repo
    ```
 
 2. Sync and Install
@@ -110,9 +110,35 @@ We recommend installing Distrobox via your package manager first; otherwise, the
 bash build.sh --distrobox
 ```
 
+### Select AUR packages
+
+The default package list is the `DEFAULT_AUR_PACKAGES` Bash array in `build.sh`.
+To override it for a run, pass package names as positional arguments. Both container
+modes accept the same list:
+
+```bash
+packages=("openssl-1.1" "lib32-openssl-1.1")
+bash build.sh --nspawn=bootstrap "${packages[@]}"
+# Or: bash build.sh --distrobox "${packages[@]}"
+```
+
+Packages are checked, built, and collected using this list. Put dependencies before
+packages that need them; for example, `openssl-1.1` precedes `lib32-openssl-1.1`.
+Omitting package arguments keeps the default list.
+
 ### Output
 
-Once the build completes, the newly generated `.pkg.tar.zst` files and the updated repository database will replace the existing binaries in the `x86_64` directory.
+Set `CUSTOM_REPO` to override the repository name (default: `openssl-1.1-libs`):
+
+```bash
+packages=("openssl-1.1" "lib32-openssl-1.1")
+CUSTOM_REPO=my-aur-repo bash build.sh --nspawn=bootstrap "${packages[@]}"
+```
+
+Packages, `<repo>.db*`, `<repo>.files*`, `lastupdate`, and `lastsync` are written
+to `repo/$CUSTOM_REPO/`, without an architecture subdirectory. The transfer
+archive is `dist/<repo>.tar`. Use the same repository name in `/etc/pacman.conf`
+and point `Server` at the directory containing the database and packages.
 
 ## Thanks
 

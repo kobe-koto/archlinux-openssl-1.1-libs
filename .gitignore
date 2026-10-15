@@ -1,5 +1,5 @@
-openssl-1.1-libs.*.tar.*.old
-openssl-1.1-libs.tar
+*.db.tar.*.old
+*.files.tar.*.old
 archlinux-build/
 dist/
 tmp/
