@@ -3,8 +3,14 @@
 set -e
 
 CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
+ENABLE_MOLD="${ENABLE_MOLD:-0}"
 if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
     echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
+    exit 1
+fi
+
+if [[ "$ENABLE_MOLD" != 0 && "$ENABLE_MOLD" != 1 ]]; then
+    echo "ERROR: ENABLE_MOLD must be 0 or 1." >&2
     exit 1
 fi
 
@@ -22,6 +28,15 @@ BUILD_FOLDER="$BUILD_FOLDER/build"
 REPO_FOLDER="$WORKING_FOLDER/repo/$CUSTOM_REPO"
 
 # ==== BUILD ====
+LINKER_PREFIX=()
+if [[ "$ENABLE_MOLD" == 1 ]]; then
+    if ! command -v mold > /dev/null; then
+        pacman -S --needed --disable-sandbox --noconfirm mold
+    fi
+    LINKER_PREFIX=(mold -run)
+    echo ">>> Using mold -run for package builds."
+fi
+
 # chore: make working folder
 mkdir -p "$BUILD_FOLDER"
 chmod 777 "$BUILD_FOLDER"
@@ -33,7 +48,7 @@ for package in "${AUR_PACKAGES[@]}"; do
         [[ -f "$key" ]] || continue
         "${WORKER_EXEC_PREFIX[@]}" gpg --import "$key"
     done
-    "${WORKER_EXEC_PREFIX[@]}" makepkg -D "$package_dir" -Ccsi --noconfirm
+    "${WORKER_EXEC_PREFIX[@]}" "${LINKER_PREFIX[@]}" makepkg -D "$package_dir" -Ccsi --noconfirm
 done
 
 # ==== REPO ====

@@ -149,6 +149,23 @@ For Distrobox, configure these values when creating the container. To change
 them for an existing `archlinux-build` container, stop and remove that container
 with Distrobox before running the script again.
 
+### Optional mold linker
+
+Set `ENABLE_MOLD=1` to use `mold -run` for package builds:
+
+```bash
+ENABLE_MOLD=1 bash build.sh --nspawn=bootstrap "${packages[@]}"
+# Can be combined with TMP_SIZE, BUILD_TMP_SIZE, and CUSTOM_REPO.
+```
+
+The container installs `mold` if it is missing, then runs
+`runuser -u worker -- mold -run makepkg ...` for each package. The wrapper is
+started after switching users so its environment reaches the build tools.
+Unset or `ENABLE_MOLD=0` keeps the normal linker; other values are rejected.
+Disabling it on a later run does not uninstall mold, but stops using the wrapper.
+Packages whose versions are already current still skip compilation; changing
+this flag alone does not force a rebuild.
+
 ### Output
 
 Set `CUSTOM_REPO` to override the repository name (default: `openssl-1.1-libs`):
