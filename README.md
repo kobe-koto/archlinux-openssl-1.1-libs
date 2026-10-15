@@ -126,6 +126,29 @@ Packages are checked, built, and collected using this list. Put dependencies bef
 packages that need them; for example, `openssl-1.1` precedes `lib32-openssl-1.1`.
 Omitting package arguments keeps the default list.
 
+### Temporary space
+
+Set `TMP_SIZE` to mount `/var/tmp/aur-builder` as tmpfs with a capacity limit
+and pass it to build tools as `TMPDIR`. This keeps temporary files separate from
+Distrobox's shared host `/tmp`. Set `BUILD_TMP_SIZE` independently for the
+`/build` directory used by the builder:
+
+```bash
+TMP_SIZE=8G BUILD_TMP_SIZE=16G bash build.sh --nspawn=bootstrap "${packages[@]}"
+# Or: TMP_SIZE=8G BUILD_TMP_SIZE=16G bash build.sh --distrobox "${packages[@]}"
+```
+
+Accepted values are positive byte counts or K/M/G/T suffixes. Unset variables
+keep the container's default mounts. These are tmpfs
+capacity limits, not per-user disk quotas; actual use consumes memory and swap.
+The build mount allows execution for configure checks and compiled test tools.
+If a PKGBUILD or makepkg configuration sets `BUILDDIR` elsewhere, that directory
+is outside the `/build` limit.
+
+For Distrobox, configure these values when creating the container. To change
+them for an existing `archlinux-build` container, stop and remove that container
+with Distrobox before running the script again.
+
 ### Output
 
 Set `CUSTOM_REPO` to override the repository name (default: `openssl-1.1-libs`):

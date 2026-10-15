@@ -6,6 +6,8 @@ CONTAINER_NAME="archlinux-build"
 WORKER_USERNAME="worker"
 DIST_FOLDER="$PWD/dist"
 CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
+TMP_SIZE="${TMP_SIZE:-}"
+BUILD_TMP_SIZE="${BUILD_TMP_SIZE:-}"
 DEFAULT_AUR_PACKAGES=("openssl-1.1" "lib32-openssl-1.1")
 AUR_PACKAGES=()
 
@@ -13,6 +15,13 @@ if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
     echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
     exit 1
 fi
+
+for size in "$TMP_SIZE" "$BUILD_TMP_SIZE"; do
+    if [[ -n "$size" && ! "$size" =~ ^[1-9][0-9]*[kKmMgGtT]?$ ]]; then
+        echo "ERROR: Invalid tmpfs size '$size'. Use a positive byte count or K/M/G/T suffix." >&2
+        exit 1
+    fi
+done
 
 REPO_FOLDER="$PWD/repo/$CUSTOM_REPO"
 
@@ -99,9 +108,16 @@ if [[ "$MODE" == "distrobox" ]]; then
         bash utils/install_distrobox.sh
     fi
 
-    CONTAINER_NAME=$CONTAINER_NAME EXEC_PREFIX=$EXEC_PREFIX WORKER_USERNAME=$WORKER_USERNAME DIST_FOLDER=$DIST_FOLDER bash utils/build_box_distrobox.sh
+    CONTAINER_NAME=$CONTAINER_NAME EXEC_PREFIX=$EXEC_PREFIX WORKER_USERNAME=$WORKER_USERNAME DIST_FOLDER=$DIST_FOLDER TMP_SIZE=$TMP_SIZE BUILD_TMP_SIZE=$BUILD_TMP_SIZE bash utils/build_box_distrobox.sh || exit 1
 elif [[ "$MODE" == "nspawn" ]]; then
-    EXEC_PREFIX="sudo systemd-nspawn -qD ./$CONTAINER_NAME/ --bind $DIST_FOLDER:/root/dist_bridge --bind $PWD/utils/container/build.sh:/usr/local/bin/container_build.sh --"
+    TMPFS_OPTIONS=()
+    if [[ -n "$TMP_SIZE" ]]; then
+        TMPFS_OPTIONS+=("--tmpfs=/var/tmp/aur-builder:size=$TMP_SIZE,mode=1777,exec")
+    fi
+    if [[ -n "$BUILD_TMP_SIZE" ]]; then
+        TMPFS_OPTIONS+=("--tmpfs=/build:size=$BUILD_TMP_SIZE,mode=1777,exec")
+    fi
+    EXEC_PREFIX="sudo systemd-nspawn -qD ./$CONTAINER_NAME/ --bind $DIST_FOLDER:/root/dist_bridge --bind $PWD/utils/container/build.sh:/usr/local/bin/container_build.sh ${TMPFS_OPTIONS[*]} --"
 
     echo "INFO: systemd-nspawn requires root"
     keep_sudo_alive
@@ -168,7 +184,11 @@ fi
 echo ">>> Version mismatch or packages missing. Proceeding with build..."
 
 # ==== BUILD ====
-if ! $EXEC_PREFIX sudo env CUSTOM_REPO="$CUSTOM_REPO" bash container_build.sh "$WORKER_USERNAME" "${AUR_PACKAGES[@]}"; then
+CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO")
+if [[ -n "$TMP_SIZE" ]]; then
+    CONTAINER_ENV+=(TMPDIR=/var/tmp/aur-builder)
+fi
+if ! $EXEC_PREFIX sudo env "${CONTAINER_ENV[@]}" bash container_build.sh "$WORKER_USERNAME" "${AUR_PACKAGES[@]}"; then
     echo "ERROR: Container build failed." >&2
     exit 1
 fi
