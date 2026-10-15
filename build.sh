@@ -123,7 +123,7 @@ elif [[ "$MODE" == "nspawn" ]]; then
     if [[ -n "$BUILD_TMP_SIZE" ]]; then
         TMPFS_OPTIONS+=("--tmpfs=/build:size=$BUILD_TMP_SIZE,mode=1777,exec")
     fi
-    EXEC_PREFIX="sudo systemd-nspawn -qD ./$CONTAINER_NAME/ --bind $DIST_FOLDER:/root/dist_bridge --bind $PWD/utils/container/build.sh:/usr/local/bin/container_build.sh ${TMPFS_OPTIONS[*]} --"
+    EXEC_PREFIX="sudo systemd-nspawn -qD ./$CONTAINER_NAME/ --capability=CAP_SYS_CHROOT,CAP_MKNOD,CAP_SYS_ADMIN --bind $DIST_FOLDER:/root/dist_bridge --bind $PWD/utils/container/build.sh:/usr/local/bin/container_build.sh ${TMPFS_OPTIONS[*]} --"
 
     echo "INFO: systemd-nspawn requires root"
     keep_sudo_alive
