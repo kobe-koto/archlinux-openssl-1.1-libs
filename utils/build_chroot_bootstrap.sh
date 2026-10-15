@@ -14,7 +14,7 @@ $EXEC_PREFIX bash -c "echo Include = /etc/pacman.d/mirrorlist >> /etc/pacman.con
 
 # Install required packages
 $EXEC_PREFIX pacman -Syu --disable-sandbox --noconfirm
-$EXEC_PREFIX pacman -S --disable-sandbox --noconfirm base-devel multilib-devel git
+$EXEC_PREFIX pacman -S --disable-sandbox --noconfirm binutils base-devel multilib-devel git
 
 # prepare
 EXEC_PREFIX=$EXEC_PREFIX WORKER_USERNAME=$WORKER_USERNAME bash utils/prepare_container.sh
