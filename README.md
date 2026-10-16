@@ -220,6 +220,11 @@ stripping with `!strip`:
 ```bash
 STRIP_ON_LINK=1 bash build.sh --nspawn=bootstrap "${packages[@]}"
 ```
+
+When `ENABLE_LLVM=1` is also set, binary stripping uses `llvm-strip`. Unset or
+`STRIP_ON_LINK=0` keeps the normal makepkg behavior; other values are rejected.
+This switch does not force a rebuild of already-current package versions.
+
 ### Disable debug builds
 
 Set `DISABLE_DEBUG=1` to opt out of makepkg debug builds:

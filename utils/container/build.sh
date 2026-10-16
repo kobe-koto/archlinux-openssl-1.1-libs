@@ -100,6 +100,13 @@ fi
 if [[ "$ENABLE_LLVM" == 1 ]]; then
     export CC=clang CXX=clang++
     export AR=llvm-ar RANLIB=llvm-ranlib NM=llvm-nm
+    STRIP_BINARIES=llvm-strip
+    strip() {
+        if [[ "${1:-}" == llvm-strip ]]; then
+            shift
+        fi
+        command llvm-strip "$@"
+    }
     # Clang does not support GCC's -flto=auto spelling.
     LTOFLAGS="${LTOFLAGS//-flto=auto/-flto=full}"
     if [[ "${ENABLE_MOLD:-0}" != 1 ]]; then
