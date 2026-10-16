@@ -6,6 +6,7 @@ CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
 export ENABLE_LLVM="${ENABLE_LLVM:-0}"
 export DISABLE_DEBUG="${DISABLE_DEBUG:-0}"
+export STRIP_ON_LINK="${STRIP_ON_LINK:-0}"
 export LTO_MODE="${LTO_MODE:-default}"
 if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
     echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
@@ -24,6 +25,11 @@ fi
 
 if [[ "$DISABLE_DEBUG" != 0 && "$DISABLE_DEBUG" != 1 ]]; then
     echo "ERROR: DISABLE_DEBUG must be 0 or 1." >&2
+    exit 1
+fi
+
+if [[ "$STRIP_ON_LINK" != 0 && "$STRIP_ON_LINK" != 1 ]]; then
+    echo "ERROR: STRIP_ON_LINK must be 0 or 1." >&2
     exit 1
 fi
 
@@ -66,7 +72,7 @@ if [[ "$ENABLE_LLVM" == 1 ]]; then
     echo ">>> Using the Clang/LLVM toolchain."
 fi
 
-if [[ "$ENABLE_LLVM" == 1 || "$LTO_MODE" != default || "$DISABLE_DEBUG" == 1 ]]; then
+if [[ "$ENABLE_LLVM" == 1 || "$LTO_MODE" != default || "$DISABLE_DEBUG" == 1 || "$STRIP_ON_LINK" == 1 ]]; then
     MAKEPKG_CONFIG=$(mktemp "${TMPDIR:-/tmp}/aur-makepkg.XXXXXX.conf")
     trap 'rm -f -- "$MAKEPKG_CONFIG"' EXIT
     cat > "$MAKEPKG_CONFIG" <<'CONFIG'
@@ -84,6 +90,11 @@ if [[ "$DISABLE_DEBUG" == 1 ]]; then
     done
     OPTIONS=("${selected_options[@]}" '!debug')
     unset selected_options option
+fi
+
+if [[ "$STRIP_ON_LINK" == 1 ]]; then
+    OPTIONS+=('!strip')
+    LDFLAGS+=" -s"
 fi
 
 if [[ "$ENABLE_LLVM" == 1 ]]; then
@@ -142,6 +153,9 @@ CONFIG
     MAKEPKG_OPTIONS=(--config "$MAKEPKG_CONFIG")
     if [[ "$DISABLE_DEBUG" == 1 ]]; then
         echo ">>> Disabling makepkg debug builds (!debug)."
+    fi
+    if [[ "$STRIP_ON_LINK" == 1 ]]; then
+        echo ">>> Enabling link-time stripping (-s, !strip)."
     fi
     echo ">>> LTO mode: $LTO_MODE"
 fi

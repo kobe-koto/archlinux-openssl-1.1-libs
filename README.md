@@ -212,6 +212,14 @@ the requested optimization. Hardcoded project flags or compiler commands can
 also override the selection. These switches target C/C++ builds, not Rust LTO.
 Changing modes does not force a rebuild of already-current package versions.
 
+### Optional stripping at link time
+
+Set `STRIP_ON_LINK=1` to add `-s` to `LDFLAGS` and disable makepkg's post-build
+stripping with `!strip`:
+
+```bash
+STRIP_ON_LINK=1 bash build.sh --nspawn=bootstrap "${packages[@]}"
+```
 ### Disable debug builds
 
 Set `DISABLE_DEBUG=1` to opt out of makepkg debug builds:
