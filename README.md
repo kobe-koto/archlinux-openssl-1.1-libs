@@ -212,6 +212,22 @@ the requested optimization. Hardcoded project flags or compiler commands can
 also override the selection. These switches target C/C++ builds, not Rust LTO.
 Changing modes does not force a rebuild of already-current package versions.
 
+### Disable debug builds
+
+Set `DISABLE_DEBUG=1` to opt out of makepkg debug builds:
+
+```bash
+DISABLE_DEBUG=1 bash build.sh --nspawn=bootstrap "${packages[@]}"
+# Also works with --distrobox and the LLVM, LTO, and mold switches.
+```
+
+The temporary makepkg configuration replaces `debug` with `!debug` in
+`OPTIONS`, equivalent to that change in `/etc/makepkg.conf`. Other options
+are preserved, and the system configuration is not edited. Unset or
+`DISABLE_DEBUG=0` keeps the usual debug policy; other values are rejected.
+PKGBUILD `options` still take precedence, and hardcoded debug flags are not
+removed. This switch does not force a rebuild of already-current versions.
+
 ### Output
 
 Set `CUSTOM_REPO` to override the repository name (default: `openssl-1.1-libs`):

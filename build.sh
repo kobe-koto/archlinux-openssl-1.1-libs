@@ -10,6 +10,7 @@ TMP_SIZE="${TMP_SIZE:-}"
 BUILD_TMP_SIZE="${BUILD_TMP_SIZE:-}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
 ENABLE_LLVM="${ENABLE_LLVM:-0}"
+DISABLE_DEBUG="${DISABLE_DEBUG:-0}"
 LTO_MODE="${LTO_MODE:-default}"
 DEFAULT_AUR_PACKAGES=("openssl-1.1" "lib32-openssl-1.1")
 AUR_PACKAGES=()
@@ -33,6 +34,11 @@ fi
 
 if [[ "$ENABLE_LLVM" != 0 && "$ENABLE_LLVM" != 1 ]]; then
     echo "ERROR: ENABLE_LLVM must be 0 or 1." >&2
+    exit 1
+fi
+
+if [[ "$DISABLE_DEBUG" != 0 && "$DISABLE_DEBUG" != 1 ]]; then
+    echo "ERROR: DISABLE_DEBUG must be 0 or 1." >&2
     exit 1
 fi
 
@@ -211,7 +217,7 @@ fi
 echo ">>> Version mismatch or packages missing. Proceeding with build..."
 
 # ==== BUILD ====
-CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO" "ENABLE_MOLD=$ENABLE_MOLD" "ENABLE_LLVM=$ENABLE_LLVM" "LTO_MODE=$LTO_MODE")
+CONTAINER_ENV=("CUSTOM_REPO=$CUSTOM_REPO" "ENABLE_MOLD=$ENABLE_MOLD" "ENABLE_LLVM=$ENABLE_LLVM" "LTO_MODE=$LTO_MODE" "DISABLE_DEBUG=$DISABLE_DEBUG")
 if [[ -n "$TMP_SIZE" ]]; then
     CONTAINER_ENV+=(TMPDIR=/var/tmp/aur-builder)
 fi

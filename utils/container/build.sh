@@ -5,6 +5,7 @@ set -e
 CUSTOM_REPO="${CUSTOM_REPO:-openssl-1.1-libs}"
 ENABLE_MOLD="${ENABLE_MOLD:-0}"
 export ENABLE_LLVM="${ENABLE_LLVM:-0}"
+export DISABLE_DEBUG="${DISABLE_DEBUG:-0}"
 export LTO_MODE="${LTO_MODE:-default}"
 if [[ ! "$CUSTOM_REPO" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
     echo "ERROR: Invalid repository name '$CUSTOM_REPO'." >&2
@@ -18,6 +19,11 @@ fi
 
 if [[ "$ENABLE_LLVM" != 0 && "$ENABLE_LLVM" != 1 ]]; then
     echo "ERROR: ENABLE_LLVM must be 0 or 1." >&2
+    exit 1
+fi
+
+if [[ "$DISABLE_DEBUG" != 0 && "$DISABLE_DEBUG" != 1 ]]; then
+    echo "ERROR: DISABLE_DEBUG must be 0 or 1." >&2
     exit 1
 fi
 
@@ -60,13 +66,25 @@ if [[ "$ENABLE_LLVM" == 1 ]]; then
     echo ">>> Using the Clang/LLVM toolchain."
 fi
 
-if [[ "$ENABLE_LLVM" == 1 || "$LTO_MODE" != default ]]; then
+if [[ "$ENABLE_LLVM" == 1 || "$LTO_MODE" != default || "$DISABLE_DEBUG" == 1 ]]; then
     MAKEPKG_CONFIG=$(mktemp "${TMPDIR:-/tmp}/aur-makepkg.XXXXXX.conf")
     trap 'rm -f -- "$MAKEPKG_CONFIG"' EXIT
     cat > "$MAKEPKG_CONFIG" <<'CONFIG'
 # Load the standard system, drop-in, and worker-user configuration first.
 source /usr/share/makepkg/util/config.sh
 source_makepkg_config /etc/makepkg.conf
+
+if [[ "$DISABLE_DEBUG" == 1 ]]; then
+    selected_options=()
+    for option in "${OPTIONS[@]}"; do
+        case "$option" in
+            debug|'!debug') ;;
+            *) selected_options+=("$option") ;;
+        esac
+    done
+    OPTIONS=("${selected_options[@]}" '!debug')
+    unset selected_options option
+fi
 
 if [[ "$ENABLE_LLVM" == 1 ]]; then
     export CC=clang CXX=clang++
@@ -122,6 +140,9 @@ fi
 CONFIG
     chmod 644 "$MAKEPKG_CONFIG"
     MAKEPKG_OPTIONS=(--config "$MAKEPKG_CONFIG")
+    if [[ "$DISABLE_DEBUG" == 1 ]]; then
+        echo ">>> Disabling makepkg debug builds (!debug)."
+    fi
     echo ">>> LTO mode: $LTO_MODE"
 fi
 
